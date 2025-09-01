@@ -1,0 +1,98 @@
+[
+  {
+    "bbox": [345, 172, 463, 290],
+    "category": "Section-header",
+    "text": "A",
+    "page_number": 0,
+    "page_index": 0,
+    "global_index": 0
+  },
+  {
+    "bbox": [141, 359, 654, 523],
+    "category": "Text",
+    "text": "挨 (rad.64) āi 1. To be or get close to. 2. Close range techniques in general. 3. In wrestling, to lean on, a throwing technique. 4. To get in very close to the adversary's torso for a short strike, often used for a throw or control. From Bajiquan, one of its ten major techniques, see also shí dà jī fǎ.",
+    "page_number": 0,
+    "page_index": 1,
+    "global_index": 1
+  },
+  {
+    "bbox": [141, 523, 654, 654],
+    "category": "Text",
+    "text": "āi shēn pào 挨身炮 Close Range Barrage: one of Xingyiquan's traditional partner routines, common to many branches, develops close range techniques, written up as twenty-one to twenty-three moves. Also called ān shēn pào.",
+    "page_number": 0,
+    "page_index": 2,
+    "global_index": 2
+  },
+  {
+    "bbox": [143, 663, 476, 701],
+    "category": "Text",
+    "text": "矮 (rad.111) ǎi Short of stature; low.",
+    "page_number": 0,
+    "page_index": 3,
+    "global_index": 3
+  },
+  {
+    "bbox": [143, 707, 654, 784],
+    "category": "Text",
+    "text": "ǎi gōng bù 矮弓步 Low bow stance, the hip joint well set in and the torso often leaning onto the thigh. See also gōng bù.",
+    "page_number": 0,
+    "page_index": 4,
+    "global_index": 4
+  },
+  {
+    "bbox": [143, 788, 526, 819],
+    "category": "Text",
+    "text": "ǎi zhuāng 短桩 Low stake standing posture.",
+    "page_number": 0,
+    "page_index": 5,
+    "global_index": 5
+  },
+  {
+    "bbox": [143, 830, 654, 895],
+    "category": "Text",
+    "text": "安 (rad.40) ān 1. Peaceful, calm. 2. At ease. 3. To pacify. 4. To arrange.",
+    "page_number": 0,
+    "page_index": 6,
+    "global_index": 6
+  },
+  {
+    "bbox": [143, 897, 654, 955],
+    "category": "Text",
+    "text": "ān shēn pào 安身炮 Keep the Body Safe Barrage, see āi shēn pào.",
+    "page_number": 0,
+    "page_index": 7,
+    "global_index": 7
+  },
+  {
+    "bbox": [143, 964, 654, 1146],
+    "category": "Text",
+    "text": "按 (rad.64) àn 1. To push down with one or two hands, usually with the palm facing down: the technique is used to shut down an adversary. 2. To press forward, up then down, or down then up. 3. While taking the pulse, to press while looking for tenderness in the channels. From TCM. 4. To push down, one of the falling hands in Chuojiao, see also luò shǒu.",
+    "page_number": 0,
+    "page_index": 8,
+    "global_index": 8
+  },
+  {
+    "bbox": [143, 1151, 654, 1231],
+    "category": "Text",
+    "text": "àn dào 按刀 Press down with a broadsword, the left hand pressing on the spine of the blade or on the right wrist, edge down or pressing down with the flat of the blade.",
+    "page_number": 0,
+    "page_index": 9,
+    "global_index": 9
+  },
+  {
+    "bbox": [345, 172, 463, 290],
+    "category": "Section-header",
+    "text": "A",
+    "page_number": 1,
+    "page_index": 0,
+    "global_index": 10
+  },
+  {
+    "bbox": [141, 359, 654, 523],
+    "category": "Text",
+    "text": "Example entry from page 1 with different content to demonstrate page numbering.",
+    "page_number": 1,
+    "page_index": 1,
+    "global_index": 11
+  }
+]

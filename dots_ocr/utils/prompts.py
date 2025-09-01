@@ -37,10 +37,11 @@ dict_promptmode_to_prompt = {
 
 1. Bbox format: [x1, y1, x2, y2]
 
-2. Layout Categories: The possible categories are ['Caption', 'Footnote', 'List-item', 'Page-footer', 'Page-header', 'Picture', 'Section-header', 'Text', 'Title'].
+2. Layout Categories: The possible categories are ['Caption', 'Footnote', 'List-item', 'Page-footer', 'Page-header', 'Picture', 'Section-header', 'Text', 'Title', 'Table'].
 
 3. Text Extraction & Formatting Rules:
     - Picture: For the 'Picture' category, the text field should be omitted.
+    - Table: Format their text as plain text, preserving original spacing and line breaks as much as possible. Do not convert the table to HTML.
     - All Others (Text, Title, Table, etc.): Format their text as plain text, preserving original spacing and line breaks as much as possible.
 
 4. Constraints:

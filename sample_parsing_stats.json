@@ -1,0 +1,19 @@
+{
+  "total_pages": 2,
+  "total_entries_before_filter": 43,
+  "total_entries_after_filter": 41,
+  "categories_found": ["Text", "Section-header", "Page-header", "Page-footer"],
+  "categories_in_output": ["Text", "Section-header"],
+  "page_range": {
+    "start": 0,
+    "end": 1
+  },
+  "filtering_applied": {
+    "exclude_categories": ["Page-header", "Page-footer"],
+    "min_text_length": 5,
+    "include_categories": null
+  },
+  "sorting_applied": "page_and_index",
+  "processing_time_seconds": 45.2,
+  "memory_usage_mb": 128.5
+}

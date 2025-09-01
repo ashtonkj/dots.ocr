@@ -209,16 +209,15 @@ class EnhancedDotsOCRParser:
     
     def add_page_info(self, page_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Add page numbers and sequential indices to all entries.
+        Add page numbers and page indices to all entries (global indices assigned later).
         
         Args:
             page_results: List of page result dictionaries from the parser
             
         Returns:
-            List of enhanced entries with page numbers and indices
+            List of enhanced entries with page numbers and page indices
         """
         enhanced_entries = []
-        global_index_counter = 0
         
         for page_result in page_results:
             page_no = page_result.get('page_no', 0)
@@ -238,15 +237,208 @@ class EnhancedDotsOCRParser:
             
             # Add page information to each entry
             for idx, entry in enumerate(page_entries):
+                # Skip entries that are not dictionaries (e.g., strings, numbers, etc.)
+                if not isinstance(entry, dict):
+                    print(f"Warning: Skipping non-dict entry at page {page_no} column {column} index {idx}: {type(entry)} - {entry}")
+                    continue
+                
                 enhanced_entry = entry.copy()
                 enhanced_entry['page_number'] = page_no
                 enhanced_entry['page_index'] = idx
-                enhanced_entry['global_index'] = global_index_counter
                 enhanced_entry['column'] = column
                 enhanced_entries.append(enhanced_entry)
-                global_index_counter += 1
         
         return enhanced_entries
+    
+    def load_existing_json_files(self, output_dir: str) -> List[Dict[str, Any]]:
+        """
+        Load all existing JSON files from the output directory and merge them.
+        
+        Args:
+            output_dir: Output directory containing JSON files
+            
+        Returns:
+            List of enhanced entries with page numbers and page indices (global indices assigned later)
+        """
+        enhanced_entries = []
+        
+        # Find all JSON files in the output directory
+        json_files = []
+        for root, dirs, files in os.walk(output_dir):
+            for file in files:
+                if file.endswith('.json') and not file.startswith('merged_'):
+                    json_files.append(os.path.join(root, file))
+        
+        if not json_files:
+            print(f"Warning: No JSON files found in {output_dir}")
+            return enhanced_entries
+        
+        print(f"Found {len(json_files)} JSON files to merge")
+        
+        # Sort files by page number (numeric) to ensure correct ordering
+        def extract_page_number(filepath):
+            filename = os.path.basename(filepath)
+            import re
+            page_match = re.search(r'_page_(\d+)_', filename)
+            if page_match:
+                return int(page_match.group(1))
+            return 0  # Default to 0 if no page number found
+        
+        json_files.sort(key=extract_page_number)
+        
+        # Debug: Show the sorted order
+        print("Processing files in order:")
+        for i, json_file in enumerate(json_files[:5]):  # Show first 5 files
+            page_num = extract_page_number(json_file)
+            print(f"  {i+1}. Page {page_num}: {os.path.basename(json_file)}")
+        if len(json_files) > 5:
+            print(f"  ... and {len(json_files) - 5} more files")
+        
+        for json_file in json_files:
+            try:
+                # Extract page and column info from filename
+                filename = os.path.basename(json_file)
+                page_no = 0
+                column = 'full'
+                
+                # Parse filename to extract page number and column
+                # Expected format: *_page_<num>_<column>_page_<num>.json
+                import re
+                page_match = re.search(r'_page_(\d+)_', filename)
+                if page_match:
+                    page_no = int(page_match.group(1))
+                
+                column_match = re.search(r'_page_\d+_(left|right)_', filename)
+                if column_match:
+                    column = column_match.group(1)
+                
+                # Load the JSON file
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    page_entries = json.load(f)
+                
+                # Add page information to each entry
+                for idx, entry in enumerate(page_entries):
+                    # Skip entries that are not dictionaries (e.g., strings, numbers, etc.)
+                    if not isinstance(entry, dict):
+                        print(f"Warning: Skipping non-dict entry in {filename} at index {idx}: {type(entry)} - {entry}")
+                        continue
+                    
+                    enhanced_entry = entry.copy()
+                    enhanced_entry['page_number'] = page_no
+                    enhanced_entry['page_index'] = idx
+                    enhanced_entry['column'] = column
+                    enhanced_entries.append(enhanced_entry)
+                
+                print(f"Loaded {len(page_entries)} entries from {filename}")
+                
+            except Exception as e:
+                print(f"Warning: Could not load {json_file}: {e}")
+                continue
+        
+        print(f"Total entries loaded: {len(enhanced_entries)}")
+        return enhanced_entries
+    
+    def assign_global_indices(self, entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Assign contiguous global indices to entries after filtering.
+        
+        Args:
+            entries: List of entry dictionaries
+            
+        Returns:
+            List of entries with updated global indices
+        """
+        for idx, entry in enumerate(entries):
+            entry['global_index'] = idx
+        return entries
+    
+    def merge_and_filter_only(self,
+                             output_dir: str,
+                             exclude_categories: Optional[List[str]] = None,
+                             include_categories: Optional[List[str]] = None,
+                             min_text_length: int = 0,
+                             custom_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
+                             sort_by: str = 'page_and_index',
+                             save_merged_output: bool = True) -> Dict[str, Any]:
+        """
+        Merge and filter existing JSON files in the output directory without parsing PDF.
+        
+        Args:
+            output_dir: Output directory containing JSON files
+            exclude_categories: Categories to exclude
+            include_categories: Categories to include
+            min_text_length: Minimum text length
+            custom_filter: Custom filter function
+            sort_by: Sorting method
+            save_merged_output: Whether to save merged output
+            
+        Returns:
+            Dictionary containing merge results and statistics
+        """
+        print("🔄 Merge-only mode: Loading existing JSON files...")
+        
+        # Load all existing JSON files
+        all_entries = self.load_existing_json_files(output_dir)
+        
+        if not all_entries:
+            print("❌ No entries found to merge")
+            return {
+                'stats': {
+                    'total_pages': 0,
+                    'total_entries_before_filter': 0,
+                    'total_entries_after_filter': 0,
+                    'categories_found': [],
+                    'categories_in_output': [],
+                    'page_range': {'start': 0, 'end': 0},
+                    'columns_processed': []
+                },
+                'output_dir': output_dir
+            }
+        
+        # Apply filters
+        print("Applying filters...")
+        filtered_entries = self.filter_entries(
+            all_entries,
+            exclude_categories=exclude_categories,
+            include_categories=include_categories,
+            min_text_length=min_text_length,
+            custom_filter=custom_filter
+        )
+        
+        # Sort entries
+        print(f"Sorting entries by {sort_by}...")
+        sorted_entries = self.sort_entries(filtered_entries, sort_by)
+        
+        # Assign contiguous global indices after filtering and sorting
+        print("Assigning global indices...")
+        sorted_entries = self.assign_global_indices(sorted_entries)
+        
+        # Save merged output
+        if save_merged_output:
+            merged_output_path = os.path.join(output_dir, 'merged_entries.json')
+            with open(merged_output_path, 'w', encoding='utf-8') as f:
+                json.dump(sorted_entries, f, ensure_ascii=False, indent=2)
+            print(f"✅ Merged output saved to: {merged_output_path}")
+        
+        # Generate statistics
+        stats = {
+            'total_pages': len(set(entry.get('page_number', 0) for entry in all_entries)),
+            'total_entries_before_filter': len(all_entries),
+            'total_entries_after_filter': len(filtered_entries),
+            'categories_found': list(set(entry.get('category', '') for entry in all_entries)),
+            'categories_in_output': list(set(entry.get('category', '') for entry in filtered_entries)),
+            'page_range': {
+                'start': min((entry.get('page_number', 0) for entry in filtered_entries), default=0),
+                'end': max((entry.get('page_number', 0) for entry in filtered_entries), default=0)
+            },
+            'columns_processed': list(set(entry.get('column', 'full') for entry in filtered_entries))
+        }
+        
+        return {
+            'stats': stats,
+            'output_dir': output_dir,
+            'merged_entries': sorted_entries
+        }
     
     def sort_entries(self, entries: List[Dict[str, Any]], 
                     sort_by: str = 'page_and_index') -> List[Dict[str, Any]]:
@@ -271,7 +463,7 @@ class EnhancedDotsOCRParser:
         else:
             return entries
     
-    def parse_pdf_enhanced(self, 
+    def parse_pdf_enhanced(self,
                           pdf_path: str,
                           output_dir: str,
                           start_page: Optional[int] = None,
@@ -285,7 +477,8 @@ class EnhancedDotsOCRParser:
                           save_individual_pages: bool = True,
                           save_merged_output: bool = True,
                           use_column_splitting: bool = True,
-                          column_padding: int = 20) -> Dict[str, Any]:
+                          column_padding: int = 20,
+                          clear_output: bool = True) -> Dict[str, Any]:
         """
         Parse PDF with enhanced features including filtering, indexing, merging, and column splitting.
         
@@ -304,13 +497,15 @@ class EnhancedDotsOCRParser:
             save_merged_output: Whether to save merged output
             use_column_splitting: Whether to split pages into columns before processing
             column_padding: Number of pixels to extend each column around the vertical line (creates overlap to prevent word cutting)
+            clear_output: Whether to clear the output directory before processing (default: True)
             
         Returns:
             Dictionary containing parsing results and statistics
         """
-        # Clear and recreate output directory for clean testing
+        # Clear and recreate output directory for clean testing (if requested)
         import shutil
-        if os.path.exists(output_dir):
+        if clear_output and os.path.exists(output_dir):
+            print(f"Clearing output directory: {output_dir}")
             shutil.rmtree(output_dir)
         os.makedirs(output_dir, exist_ok=True)
         
@@ -348,6 +543,10 @@ class EnhancedDotsOCRParser:
         # Sort entries
         print(f"Sorting entries by {sort_by}...")
         sorted_entries = self.sort_entries(filtered_entries, sort_by)
+        
+        # Assign contiguous global indices after filtering and sorting
+        print("Assigning global indices...")
+        sorted_entries = self.assign_global_indices(sorted_entries)
         
         # Save merged output
         if save_merged_output:
@@ -433,7 +632,7 @@ def main():
         description="Enhanced DotsOCR PDF Parser with filtering, indexing, merging, and column splitting capabilities"
     )
     
-    parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
+    parser.add_argument("pdf_path", type=str, nargs='?', help="Path to the PDF file (optional when using --merge-only)")
     parser.add_argument("output_dir", type=str, help="Output directory")
     
     # Page range arguments
@@ -459,6 +658,10 @@ def main():
                        help="Don't save individual page files")
     parser.add_argument("--no-column-splitting", action='store_true',
                        help="Disable column splitting and process full pages")
+    parser.add_argument("--no-clear-output", action='store_true',
+                       help="Don't clear the output directory before processing (default: clear output directory)")
+    parser.add_argument("--merge-only", action='store_true',
+                       help="Only merge and filter existing JSON files in output directory (skip PDF parsing)")
     parser.add_argument("--column-padding", type=int, default=20,
                        help="Padding to extend columns around vertical line (default: 20px, creates overlap)")
     
@@ -476,6 +679,10 @@ def main():
     
     args = parser.parse_args()
     
+    # Validate arguments
+    if not args.merge_only and not args.pdf_path:
+        parser.error("pdf_path is required when not using --merge-only mode")
+    
     # Initialize enhanced parser
     enhanced_parser = EnhancedDotsOCRParser(
         ip=args.ip,
@@ -489,24 +696,38 @@ def main():
         output_dir=args.output_dir
     )
     
-    # Parse PDF with enhanced features
-    result = enhanced_parser.parse_pdf_enhanced(
-        pdf_path=args.pdf_path,
-        output_dir=args.output_dir,
-        start_page=args.start_page,
-        end_page=args.end_page,
-        prompt_mode=args.prompt_mode,
-        exclude_categories=args.exclude_categories,
-        include_categories=args.include_categories,
-        min_text_length=args.min_text_length,
-        sort_by=args.sort_by,
-        save_individual_pages=not args.no_individual_pages,
-        save_merged_output=not args.no_merged_output,
-        use_column_splitting=not args.no_column_splitting,
-        column_padding=args.column_padding
-    )
+    if args.merge_only:
+        # Merge and filter only mode
+        print("🔄 Running in merge-only mode...")
+        result = enhanced_parser.merge_and_filter_only(
+            output_dir=args.output_dir,
+            exclude_categories=args.exclude_categories,
+            include_categories=args.include_categories,
+            min_text_length=args.min_text_length,
+            sort_by=args.sort_by,
+            save_merged_output=not args.no_merged_output
+        )
+        print(f"\n🎉 Merge and filter completed successfully!")
+    else:
+        # Full PDF parsing mode
+        result = enhanced_parser.parse_pdf_enhanced(
+            pdf_path=args.pdf_path,
+            output_dir=args.output_dir,
+            start_page=args.start_page,
+            end_page=args.end_page,
+            prompt_mode=args.prompt_mode,
+            exclude_categories=args.exclude_categories,
+            include_categories=args.include_categories,
+            min_text_length=args.min_text_length,
+            sort_by=args.sort_by,
+            save_individual_pages=not args.no_individual_pages,
+            save_merged_output=not args.no_merged_output,
+            use_column_splitting=not args.no_column_splitting,
+            column_padding=args.column_padding,
+            clear_output=not args.no_clear_output
+        )
+        print(f"\n🎉 Enhanced parsing completed successfully!")
     
-    print(f"\n🎉 Enhanced parsing completed successfully!")
     print(f"📄 Processed {result['stats']['total_pages']} pages")
     print(f"📝 Found {result['stats']['total_entries_before_filter']} total entries")
     print(f"✅ Output {result['stats']['total_entries_after_filter']} filtered entries")

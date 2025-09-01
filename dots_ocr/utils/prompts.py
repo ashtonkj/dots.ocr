@@ -31,4 +31,21 @@ dict_promptmode_to_prompt = {
     # "prompt_table_html": """Convert the table in this image to HTML.""",
     # "prompt_table_latex": """Convert the table in this image to LaTeX.""",
     # "prompt_formula_latex": """Convert the formula in this image to LaTeX.""",
+    
+    # prompt_layout_text_only: parse all layout info but format everything as plain text
+    "prompt_layout_text_only": """Please output the layout information from the PDF image, including each layout element's bbox, its category, and the corresponding text content within the bbox.
+
+1. Bbox format: [x1, y1, x2, y2]
+
+2. Layout Categories: The possible categories are ['Caption', 'Footnote', 'List-item', 'Page-footer', 'Page-header', 'Picture', 'Section-header', 'Text', 'Title'].
+
+3. Text Extraction & Formatting Rules:
+    - Picture: For the 'Picture' category, the text field should be omitted.
+    - All Others (Text, Title, Table, etc.): Format their text as plain text, preserving original spacing and line breaks as much as possible.
+
+4. Constraints:
+    - The output text must be the original text from the image, with no translation.
+    - All layout elements must be sorted according to human reading order.
+
+5. Final Output: The entire output must be a single JSON object.""",
 }

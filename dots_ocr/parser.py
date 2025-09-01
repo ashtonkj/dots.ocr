@@ -172,7 +172,7 @@ class DotsOCRParser:
         }
         if source == 'pdf':
             save_name = f"{save_name}_page_{page_idx}"
-        if prompt_mode in ['prompt_layout_all_en', 'prompt_layout_only_en', 'prompt_grounding_ocr', 'prompt_layout_text_only']:
+        if prompt_mode in ['prompt_layout_all_en', 'prompt_layout_only_en', 'prompt_grounding_ocr', 'prompt_layout_text_only', 'prompt_layout_text_only_no_tables']:
             cells, filtered = post_process_output(
                 response, 
                 prompt_mode, 

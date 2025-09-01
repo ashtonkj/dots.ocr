@@ -178,14 +178,18 @@ Each entry in the output includes additional fields:
 ## Available Categories
 
 The parser can detect various content categories:
-- `Text`: Regular text content
+- `Text`: Regular text content (including dictionary entries, glossaries, word lists)
 - `Section-header`: Section headings
 - `Page-header`: Page headers
 - `Page-footer`: Page footers
 - `Picture`: Images and graphics
 - `Formula`: Mathematical formulas
-- `Table`: Tabular data
-- And more depending on the document structure
+- `List-item`: List items
+- `Caption`: Image captions
+- `Footnote`: Footnotes
+- `Title`: Document titles
+
+**Note**: The default prompt mode (`prompt_layout_text_only_no_tables`) is specifically optimized for dictionary content and will classify structured text (like dictionary entries) as `Text` rather than `Table` to avoid HTML formatting issues.
 
 ## Advanced Features
 
@@ -284,7 +288,7 @@ This will demonstrate:
 - `--no-individual-pages`: Don't save individual page files
 
 ### Parser Configuration
-- `--prompt-mode`: Prompt mode for the parser
+- `--prompt-mode`: Prompt mode for the parser (default: prompt_layout_text_only_no_tables - optimized for dictionary content)
 - `--ip`: VLLM server IP (default: localhost)
 - `--port`: VLLM server port (default: 8000)
 - `--model-name`: Model name (default: model)

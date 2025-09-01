@@ -4,6 +4,8 @@ import os
 import json
 import argparse
 from typing import List, Dict, Any, Optional, Callable
+from PIL import Image, ImageDraw
+import numpy as np
 sys.path.append('.')
 
 from dots_ocr.parser import DotsOCRParser
@@ -11,7 +13,8 @@ from dots_ocr.parser import DotsOCRParser
 
 class EnhancedDotsOCRParser:
     """
-    Enhanced DotsOCR Parser with page numbering, indexing, filtering, and merging capabilities.
+    Enhanced DotsOCR Parser with page numbering, indexing, filtering, merging capabilities,
+    and column splitting for dictionary content.
     """
     
     def __init__(self, 
@@ -43,6 +46,125 @@ class EnhancedDotsOCRParser:
             use_hf=use_hf
         )
         self.output_dir = output_dir
+    
+    def detect_vertical_line(self, image: Image.Image, threshold: int = 10) -> Optional[int]:
+        """
+        Detect the vertical line that separates columns in the page.
+        
+        Args:
+            image: PIL Image of the page
+            threshold: Minimum number of black pixels to consider a line
+        
+        Returns:
+            x-coordinate of the vertical line, or None if not found
+        """
+        # Convert to grayscale and get pixel data
+        gray = image.convert('L')
+        pixels = np.array(gray)
+        
+        # Look for vertical lines by checking each x-coordinate
+        height, width = pixels.shape
+        mid_x = width // 2
+        
+        # Search around the middle of the page
+        search_range = width // 4  # Search in the middle half
+        start_x = mid_x - search_range // 2
+        end_x = mid_x + search_range // 2
+        
+        best_line_x = None
+        max_black_pixels = 0
+        
+        for x in range(start_x, end_x):
+            # Count black pixels in this vertical line
+            black_pixels = np.sum(pixels[:, x] < 128)  # Assuming black pixels are < 128
+            
+            if black_pixels > max_black_pixels and black_pixels > threshold:
+                max_black_pixels = black_pixels
+                best_line_x = x
+        
+        return best_line_x
+    
+    def split_page_into_columns(self, image: Image.Image, line_x: int, padding: int = 20) -> tuple[Image.Image, Image.Image]:
+        """
+        Split a page image into left and right columns with padding around the line.
+        
+        Args:
+            image: PIL Image of the full page
+            line_x: x-coordinate of the vertical line
+            padding: Number of pixels to add on each side of the line to avoid cutting words
+        
+        Returns:
+            Tuple of (left_column_image, right_column_image)
+        """
+        width, height = image.size
+        
+        # Calculate split points with padding
+        # Left column extends to line + padding (captures text near the line)
+        left_split_x = line_x + padding
+        # Right column starts from line - padding (captures text near the line)
+        right_split_x = line_x - padding
+        
+        # Ensure we don't go outside image bounds
+        left_split_x = min(width, left_split_x)
+        right_split_x = max(0, right_split_x)
+        
+        # Create left column (from left edge to line + padding)
+        left_column = image.crop((0, 0, left_split_x, height))
+        
+        # Create right column (from line - padding to right edge)
+        right_column = image.crop((right_split_x, 0, width, height))
+        
+        return left_column, right_column
+    
+    def process_page_with_columns(self, page_image: Image.Image, page_no: int, 
+                                prompt_mode: str, save_dir: str, filename: str, 
+                                column_padding: int = 20) -> List[Dict[str, Any]]:
+        """
+        Process a single page by splitting it into columns and processing each column separately.
+        
+        Args:
+            page_image: PIL Image of the full page
+            page_no: Page number
+            prompt_mode: Prompt mode for the parser
+            save_dir: Directory to save results
+            filename: Base filename for the page
+        
+        Returns:
+            List of enhanced entries from both columns
+        """
+        # Detect the vertical line
+        line_x = self.detect_vertical_line(page_image)
+        
+        if line_x is None:
+            print(f"Warning: No vertical line detected on page {page_no}, processing as single column")
+            # Process the entire page as one column
+            result = self.parser._parse_single_image(
+                page_image, prompt_mode, save_dir, f"{filename}_page_{page_no}", 
+                source="pdf", page_idx=page_no
+            )
+            result['column'] = "full"
+            return [result]
+        
+        # Split the page into columns
+        left_column, right_column = self.split_page_into_columns(page_image, line_x, column_padding)
+        
+        print(f"Page {page_no}: Split at x={line_x} (padding: {column_padding}px), left width={left_column.width}, right width={right_column.width}")
+        
+        # Process left column
+        left_result = self.parser._parse_single_image(
+            left_column, prompt_mode, save_dir, f"{filename}_page_{page_no}_left", 
+            source="pdf", page_idx=page_no
+        )
+        left_result['column'] = "left"
+        
+        # Process right column
+        right_result = self.parser._parse_single_image(
+            right_column, prompt_mode, save_dir, f"{filename}_page_{page_no}_right", 
+            source="pdf", page_idx=page_no
+        )
+        right_result['column'] = "right"
+        
+        return [left_result, right_result]
     
     def filter_entries(self, entries: List[Dict[str, Any]], 
                       exclude_categories: Optional[List[str]] = None,
@@ -100,25 +222,27 @@ class EnhancedDotsOCRParser:
         
         for page_result in page_results:
             page_no = page_result.get('page_no', 0)
+            column = page_result.get('column', 'full')  # 'left', 'right', or 'full'
             layout_info_path = page_result.get('layout_info_path')
             
             if not layout_info_path or not os.path.exists(layout_info_path):
                 continue
             
-            # Load the layout JSON for this page
+            # Load the layout JSON for this page/column
             try:
                 with open(layout_info_path, 'r', encoding='utf-8') as f:
                     page_entries = json.load(f)
             except Exception as e:
-                print(f"Warning: Could not load layout info for page {page_no}: {e}")
+                print(f"Warning: Could not load layout info for page {page_no} column {column}: {e}")
                 continue
             
-            # Add page number and sequential index to each entry
+            # Add page information to each entry
             for idx, entry in enumerate(page_entries):
                 enhanced_entry = entry.copy()
                 enhanced_entry['page_number'] = page_no
                 enhanced_entry['page_index'] = idx
                 enhanced_entry['global_index'] = global_index_counter
+                enhanced_entry['column'] = column
                 enhanced_entries.append(enhanced_entry)
                 global_index_counter += 1
         
@@ -137,13 +261,13 @@ class EnhancedDotsOCRParser:
             Sorted list of entries
         """
         if sort_by == 'page_and_index':
-            return sorted(entries, key=lambda x: (x.get('page_number', 0), x.get('page_index', 0)))
+            return sorted(entries, key=lambda x: (x.get('page_number', 0), x.get('column', 'full'), x.get('page_index', 0)))
         elif sort_by == 'category':
-            return sorted(entries, key=lambda x: (x.get('category', ''), x.get('page_number', 0), x.get('page_index', 0)))
+            return sorted(entries, key=lambda x: (x.get('category', ''), x.get('page_number', 0), x.get('column', 'full'), x.get('page_index', 0)))
         elif sort_by == 'text':
-            return sorted(entries, key=lambda x: (x.get('text', '').lower(), x.get('page_number', 0), x.get('page_index', 0)))
+            return sorted(entries, key=lambda x: (x.get('text', '').lower(), x.get('page_number', 0), x.get('column', 'full'), x.get('page_index', 0)))
         elif sort_by == 'bbox_y':
-            return sorted(entries, key=lambda x: (x.get('page_number', 0), x.get('bbox', [0, 0, 0, 0])[1]))
+            return sorted(entries, key=lambda x: (x.get('page_number', 0), x.get('column', 'full'), x.get('bbox', [0, 0, 0, 0])[1]))
         else:
             return entries
     
@@ -159,9 +283,11 @@ class EnhancedDotsOCRParser:
                           custom_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
                           sort_by: str = 'page_and_index',
                           save_individual_pages: bool = True,
-                          save_merged_output: bool = True) -> Dict[str, Any]:
+                          save_merged_output: bool = True,
+                          use_column_splitting: bool = True,
+                          column_padding: int = 20) -> Dict[str, Any]:
         """
-        Parse PDF with enhanced features including filtering, indexing, and merging.
+        Parse PDF with enhanced features including filtering, indexing, merging, and column splitting.
         
         Args:
             pdf_path: Path to the PDF file
@@ -176,6 +302,8 @@ class EnhancedDotsOCRParser:
             sort_by: Sorting method
             save_individual_pages: Whether to save individual page files
             save_merged_output: Whether to save merged output
+            use_column_splitting: Whether to split pages into columns before processing
+            column_padding: Number of pixels to extend each column around the vertical line (creates overlap to prevent word cutting)
             
         Returns:
             Dictionary containing parsing results and statistics
@@ -186,15 +314,22 @@ class EnhancedDotsOCRParser:
             shutil.rmtree(output_dir)
         os.makedirs(output_dir, exist_ok=True)
         
-        # Parse PDF using the original parser
-        print(f"Parsing PDF: {pdf_path}")
-        page_results = self.parser.parse_file(
-            pdf_path, 
-            output_dir, 
-            prompt_mode=prompt_mode,
-            start_page=start_page,
-            end_page=end_page
-        )
+        if use_column_splitting:
+            # Use custom column-splitting approach
+            print(f"Parsing PDF with column splitting: {pdf_path}")
+            page_results = self._parse_pdf_with_columns(
+                pdf_path, output_dir, prompt_mode, start_page, end_page, column_padding
+            )
+        else:
+            # Use original parser approach
+            print(f"Parsing PDF with original method: {pdf_path}")
+            page_results = self.parser.parse_file(
+                pdf_path, 
+                output_dir, 
+                prompt_mode=prompt_mode,
+                start_page=start_page,
+                end_page=end_page
+            )
         
         # Add page information to all entries
         print("Adding page numbers and indices...")
@@ -223,7 +358,7 @@ class EnhancedDotsOCRParser:
         
         # Generate statistics
         stats = {
-            'total_pages': len(page_results),
+            'total_pages': len(set(result.get('page_no', 0) for result in page_results)),
             'total_entries_before_filter': len(all_entries),
             'total_entries_after_filter': len(filtered_entries),
             'categories_found': list(set(entry.get('category', '') for entry in all_entries)),
@@ -231,7 +366,8 @@ class EnhancedDotsOCRParser:
             'page_range': {
                 'start': min((entry.get('page_number', 0) for entry in filtered_entries), default=0),
                 'end': max((entry.get('page_number', 0) for entry in filtered_entries), default=0)
-            }
+            },
+            'columns_processed': list(set(entry.get('column', 'full') for entry in filtered_entries))
         }
         
         # Save statistics
@@ -248,11 +384,53 @@ class EnhancedDotsOCRParser:
             'stats': stats,
             'output_dir': output_dir
         }
+    
+    def _parse_pdf_with_columns(self, pdf_path: str, output_dir: str, prompt_mode: str,
+                               start_page: Optional[int] = None, end_page: Optional[int] = None,
+                               column_padding: int = 20) -> List[Dict[str, Any]]:
+        """
+        Parse PDF using column splitting approach.
+        
+        Args:
+            pdf_path: Path to the PDF file
+            output_dir: Output directory
+            prompt_mode: Prompt mode for the parser
+            start_page: Starting page number (0-based)
+            end_page: Ending page number (0-based)
+            
+        Returns:
+            List of page result dictionaries
+        """
+        from dots_ocr.utils.doc_utils import load_images_from_pdf
+        
+        print(f"Loading PDF: {pdf_path}")
+        images_origin = load_images_from_pdf(pdf_path, dpi=self.parser.dpi, start_page_id=start_page, end_page_id=end_page)
+        total_pages = len(images_origin)
+        
+        filename, _ = os.path.splitext(os.path.basename(pdf_path))
+        save_dir = os.path.join(output_dir, filename)
+        os.makedirs(save_dir, exist_ok=True)
+        
+        print(f"Processing {total_pages} pages with column splitting...")
+        
+        all_results = []
+        for i, image in enumerate(images_origin):
+            page_no = start_page + i if start_page is not None else i
+            print(f"Processing page {page_no}...")
+            
+            # Process this page with column splitting
+            page_results = self.process_page_with_columns(
+                image, page_no, prompt_mode, save_dir, filename, column_padding
+            )
+            
+            all_results.extend(page_results)
+        
+        return all_results
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Enhanced DotsOCR PDF Parser with filtering, indexing, and merging capabilities"
+        description="Enhanced DotsOCR PDF Parser with filtering, indexing, merging, and column splitting capabilities"
     )
     
     parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
@@ -279,17 +457,21 @@ def main():
                        help="Don't save merged output file")
     parser.add_argument("--no-individual-pages", action='store_true',
                        help="Don't save individual page files")
+    parser.add_argument("--no-column-splitting", action='store_true',
+                       help="Disable column splitting and process full pages")
+    parser.add_argument("--column-padding", type=int, default=20,
+                       help="Padding to extend columns around vertical line (default: 20px, creates overlap)")
     
     # Parser arguments
-    parser.add_argument("--prompt-mode", default="prompt_layout_text_only",
-                       help="Prompt mode for the parser")
+    parser.add_argument("--prompt-mode", default="prompt_layout_text_only_no_tables",
+                       help="Prompt mode for the parser (default: ultra-optimized for dictionary content)")
     parser.add_argument("--ip", default="localhost", help="VLLM server IP")
     parser.add_argument("--port", type=int, default=8000, help="VLLM server port")
     parser.add_argument("--model-name", default="model", help="Model name")
     parser.add_argument("--temperature", type=float, default=0.1, help="Temperature")
     parser.add_argument("--top-p", type=float, default=1.0, help="Top-p")
     parser.add_argument("--max-completion-tokens", type=int, default=65536, help="Max completion tokens")
-    parser.add_argument("--num-thread", type=int, default=2, help="Number of threads")
+    parser.add_argument("--num-thread", type=int, default=4, help="Number of threads")
     parser.add_argument("--dpi", type=int, default=150, help="DPI for PDF processing")
     
     args = parser.parse_args()
@@ -319,7 +501,9 @@ def main():
         min_text_length=args.min_text_length,
         sort_by=args.sort_by,
         save_individual_pages=not args.no_individual_pages,
-        save_merged_output=not args.no_merged_output
+        save_merged_output=not args.no_merged_output,
+        use_column_splitting=not args.no_column_splitting,
+        column_padding=args.column_padding
     )
     
     print(f"\n🎉 Enhanced parsing completed successfully!")

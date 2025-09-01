@@ -31,5 +31,5 @@ if __name__ == "__main__":
     )
     
     # Parse PDF
-    results = parser.parse_file(pdf_path, output_dir, start_page=20, prompt_mode="prompt_layout_text_only")
+    results = parser.parse_file(pdf_path, output_dir, start_page=20, end_page=21, prompt_mode="prompt_layout_text_only")
     print(f"✅ PDF parsed! Results saved to: {output_dir}")

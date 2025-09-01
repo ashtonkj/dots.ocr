@@ -255,9 +255,9 @@ class DotsOCRParser:
         result['file_path'] = input_path
         return [result]
         
-    def parse_pdf(self, input_path, filename, prompt_mode, save_dir, start_page=0):
+    def parse_pdf(self, input_path, filename, prompt_mode, save_dir, start_page=0, end_page=None):
         print(f"loading pdf: {input_path}")
-        images_origin = load_images_from_pdf(input_path, dpi=self.dpi, start_page_id=start_page)
+        images_origin = load_images_from_pdf(input_path, dpi=self.dpi, start_page_id=start_page, end_page_id=end_page)
         total_pages = len(images_origin)
         tasks = [
             {
@@ -297,7 +297,8 @@ class DotsOCRParser:
         prompt_mode="prompt_layout_all_en",
         bbox=None,
         fitz_preprocess=False,
-        start_page=0
+        start_page=0,
+        end_page=None
         ):
         output_dir = output_dir or self.output_dir
         output_dir = os.path.abspath(output_dir)
@@ -306,7 +307,7 @@ class DotsOCRParser:
         os.makedirs(save_dir, exist_ok=True)
 
         if file_ext == '.pdf':
-            results = self.parse_pdf(input_path, filename, prompt_mode, save_dir, start_page=start_page)
+            results = self.parse_pdf(input_path, filename, prompt_mode, save_dir, start_page=start_page, end_page=end_page)
         elif file_ext in image_extensions:
             results = self.parse_image(input_path, filename, prompt_mode, save_dir, bbox=bbox, fitz_preprocess=fitz_preprocess)
         else:

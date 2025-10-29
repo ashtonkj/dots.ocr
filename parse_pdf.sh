@@ -1,1 +1,1 @@
-./parse_pdf_enhanced.sh /home/kevin/Downloads/FalksDictionaryOfChineseMartialArts.pdf /home/kevin/development/parsed/ --start-page 48 --end-page 49 --exclude-categories Page-footer Page-header --no-clear-output
+./parse_pdf_enhanced.sh /home/kevin/Downloads/FalksDictionaryOfChineseMartialArts.pdf /home/kevin/development/parsed/ --start-page 284 --end-page 284 --exclude-categories Page-footer Page-header --no-clear-output --no-column-splitting

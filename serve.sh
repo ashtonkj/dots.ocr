@@ -3,7 +3,7 @@ export PYTHONPATH=$(dirname "$hf_model_path"):$PYTHONPATH
 # Use the model's built-in chat template instead of overriding it
 CUDA_VISIBLE_DEVICES=0 vllm serve "$hf_model_path" \
   --tensor-parallel-size 1 \
-  --gpu-memory-utilization 0.90 \
+  --gpu-memory-utilization 0.85 \
   --served-model-name model \
   --trust-remote-code \
   --compilation-config '{"level": 0, "use_inductor": false, "use_cudagraph": true, "cudagraph_num_of_warmups": 2}' \
